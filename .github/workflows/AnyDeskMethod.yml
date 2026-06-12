@@ -1,0 +1,107 @@
+name: Cloud PC + AnyDesk + Opera GX (Foolproof Mode)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    timeout-minutes: 190
+    env:
+      ANYDESK_PASS: Pass@1234
+      RUNTIME_MINUTES: 180
+
+    steps:
+      - name: Download and Silent Install AnyDesk
+        run: |
+          Write-Host "Fetching AnyDesk Standalone Client..."
+          $url = "https://download.anydesk.com/AnyDesk.exe"
+          $dst = "$env:TEMP\AnyDesk.exe"
+          Invoke-WebRequest -Uri $url -OutFile $dst
+          
+          Write-Host "Installing AnyDesk background system services..."
+          # Installs AnyDesk silently directly into the Program Files directory
+          Start-Process $dst -ArgumentList "--install", "$env:ProgramFiles\AnyDesk", "--silent" -Wait
+          Remove-Item $dst -ErrorAction SilentlyContinue
+
+      - name: Configure Unattended Access Password
+        run: |
+          $ad = "$env:ProgramFiles\AnyDesk\AnyDesk.exe"
+          Write-Host "Registering master login security policies..."
+          
+          # Pipes the password securely straight into the core configuration service file 
+          echo "${{ env.ANYDESK_PASS }}" | & $ad --set-password _unattended_access
+          
+          # Restart the service to make sure the password locks in completely
+          & $ad --restart-service
+          Start-Sleep -Seconds 5
+
+      - name: Download & Pre-Install Opera GX
+        run: |
+          Write-Host "Fetching Opera GX Installer..."
+          $url = "https://net.geo.opera.com/opera_gx/stable/windows?utm_source=forsaken&utm_medium=gx"
+          $installer = "$env:TEMP\OperaGXSetup.exe"
+          Invoke-WebRequest -Uri $url -OutFile $installer
+          
+          Write-Host "Pre-installing Opera GX silently using Chromium Core flags..."
+          $args = @(
+              "--silent=1",
+              "--allusers=1",
+              "--launchbrowser=0",
+              "--desktopshortcut=1",
+              "--startmenushortcut=1"
+          )
+          Start-Process -FilePath $installer -ArgumentList $args -Wait
+          
+          # Push the shortcut to the Public Desktop directory so AnyDesk loads it instantly
+          $publicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+          $userDesktop = "$env:USERPROFILE\Desktop"
+          
+          if (Test-Path "$userDesktop\Opera GX.lnk") {
+              Move-Item -Path "$userDesktop\Opera GX.lnk" -Destination $publicDesktop -Force -ErrorAction SilentlyContinue
+          }
+          
+          Write-Host "Creating the direct video-link trigger shortcut..."
+          $WshShell = New-Object -ComObject WScript.Shell
+          $Shortcut = $WshShell.CreateShortcut("$publicDesktop\Claim Rewards Here.lnk")
+          
+          $operaExe = "$env:ProgramFiles\Opera GX\opera.exe"
+          if (-not (Test-Path $operaExe)) { $operaExe = "$env:ProgramFiles (x86)\Opera GX\opera.exe" }
+          
+          $Shortcut.TargetPath = $operaExe
+          $Shortcut.Arguments = "https://www.opera.com/gx/forsaken"
+          $Shortcut.Save()
+          
+          Write-Host "Opera GX successfully configured!"
+
+      - name: Fetch and Display AnyDesk Connection Address
+        run: |
+          $ad = "$env:ProgramFiles\AnyDesk\AnyDesk.exe"
+          Start-Sleep -Seconds 5
+          
+          # Extract the uniquely generated 9-digit ID from the local configuration files
+          $id = & $ad --get-id
+          $cleanId = $id.Trim()
+          
+          Write-Host "====================================================" -ForegroundColor Green
+          Write-Host "       ANYDESK CLOUD MACHINE IS READY TO CONNECT     " -ForegroundColor Green
+          Write-Host "====================================================" -ForegroundColor Green
+          Write-Host " CONNECTION ID : $cleanId" -ForegroundColor Yellow
+          Write-Host " PASSWORD      : ${{ env.ANYDESK_PASS }}" -ForegroundColor Yellow
+          Write-Host "====================================================" -ForegroundColor Green
+
+      - name: Keep alive
+        run: |
+          $mins = [int]"${{ env.RUNTIME_MINUTES }}"
+          $end = (Get-Date).AddMinutes($mins)
+          while ((Get-Date) -lt $end) {
+            Write-Host ("Cloud PC Heartbeat " + (Get-Date).ToString("HH:mm:ss") + " | Active until " + $end.ToString("HH:mm:ss"))
+            Start-Sleep -Seconds 60
+          }
