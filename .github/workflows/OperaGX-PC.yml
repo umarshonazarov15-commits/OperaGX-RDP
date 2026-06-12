@@ -1,4 +1,4 @@
-name: RDP + Tailscale + Opera GX (3-Hour Auto-Cleanup)
+name: OperaGX PC
 
 on:
   workflow_dispatch:
