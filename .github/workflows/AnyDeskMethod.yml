@@ -1,4 +1,4 @@
-name: Cloud PC + AnyDesk + Opera GX (ID Loop Fix)
+name: Cloud PC + AnyDesk + Opera GX (Direct ID Bypass)
 
 on:
   workflow_dispatch:
@@ -53,7 +53,7 @@ jobs:
           
           Write-Host "Restarting system services..."
           Start-Process -FilePath $ad -ArgumentList "--restart-service" -Wait
-          Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 8
 
       - name: Download & Pre-Install Opera GX
         run: |
@@ -94,27 +94,34 @@ jobs:
 
       - name: Fetch and Display AnyDesk Connection Address
         run: |
-          $ad = "C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
-          if (-not (Test-Path $ad)) { $ad = "C:\Program Files\AnyDesk\AnyDesk.exe" }
-          
-          Write-Host "Fetching AnyDesk ID (Waiting for server registration)..."
+          Write-Host "Extracting AnyDesk ID directly from local configuration database..."
+          $confPath = "C:\ProgramData\AnyDesk\system.conf"
           $cleanId = ""
           
-          # Fix: Try up to 10 times to grab the ID cleanly, waiting 4 seconds between attempts
+          # Retry loop specifically reading the file directly rather than utilizing the buggy terminal CLI tool
           for ($i = 1; $i -le 10; $i++) {
-              $id = & $ad --get-id
-              if ($id) {
-                  $cleanId = $id.ToString().Trim()
-                  if ($cleanId -match '^\d+$' -or $cleanId.Length -gt 5) {
+              if (Test-Path $confPath) {
+                  $content = Get-Content $confPath -Raw
+                  if ($content -match 'ad\.anynet\.id=(\d+)') {
+                      $cleanId = $Matches[1]
                       break
                   }
               }
-              Write-Host "ID not ready yet. Retrying in 4 seconds... (Attempt $i/10)"
+              Write-Host "Configuration file or ID field not populated yet. Retrying in 4 seconds... (Attempt $i/10)"
               Start-Sleep -Seconds 4
           }
           
+          # Fallback: If system.conf is restricted, check alternative service.conf path
           if (-not $cleanId) {
-              Write-Error "Could not retrieve AnyDesk ID from server connection."
+              $altPath = "C:\Program Files (x86)\AnyDesk\service.conf"
+              if (Test-Path $altPath) {
+                  $content = Get-Content $altPath -Raw
+                  if ($content -match 'ad\.anynet\.id=(\d+)') { $cleanId = $Matches[1] }
+              }
+          }
+          
+          if (-not $cleanId) {
+              Write-Error "Could not retrieve AnyDesk ID from configuration file."
               exit 1
           }
           
