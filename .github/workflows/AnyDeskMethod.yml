@@ -1,4 +1,4 @@
-name: Cloud PC + AnyDesk + Opera GX (Native Fix Layout)
+name: Cloud PC + AnyDesk + Opera GX (Stable Live Download)
 
 on:
   workflow_dispatch:
@@ -60,7 +60,6 @@ jobs:
       - name: Clean and Hide Active Infrastructure Windows
         run: |
           Write-Host "Minimizing active workspace windows natively..."
-          # Completely native single-line method: coordinates window state via Windows Shell Application
           (New-Object -ComObject Shell.Application).MinimizeAll()
 
       - name: Optimize Resolution for Mobile Display
@@ -70,12 +69,12 @@ jobs:
 
       - name: Pre-Inject Master Rules & Install Opera GX
         run: |
-          Write-Host "Fetching the offline network full package installer..."
-          $url = "https://ftp.opera.com/pub/opera_gx/stable/win/Opera_GX_stable_windows_x64.exe"
+          Write-Host "Fetching the newest live package installer..."
+          # This endpoint always redirects to the newest standalone setup executable dynamically
+          $url = "https://autoupdate.geo.opera.com/get/opera_gx_stable_windows_x64"
           $installer = "$env:TEMP\OperaGXSetup.exe"
           Invoke-WebRequest -Uri $url -OutFile $installer
           
-          # Installs completely silently in the background
           Start-Process -FilePath $installer -ArgumentList "--silent=1", "--allusers=1", "--launchbrowser=0", "--desktopshortcut=1" -Wait
           
           $publicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
@@ -85,17 +84,15 @@ jobs:
               Move-Item -Path "$userDesktop\Opera GX.lnk" -Destination $publicDesktop -Force -ErrorAction SilentlyContinue 
           }
           
-          Write-Host "Configuring explicit launch arguments to remove welcome tab and force rewards..."
+          Write-Host "Configuring launch arguments to block welcome tab and force rewards panel..."
           $operaExe = "C:\Program Files\Opera GX\opera.exe"
           if (-not (Test-Path $operaExe)) { $operaExe = "C:\Program Files (x86)\Opera GX\opera.exe" }
           
-          # Rewrites the shortcut directly with forced engine flags
           $WshShell = New-Object -ComObject WScript.Shell
           $Shortcut = $WshShell.CreateShortcut("$publicDesktop\Opera GX Browser.lnk")
           $Shortcut.TargetPath = $operaExe
-          # --no-first-run completely drops the welcome tab sequence
-          # --enable-features=gxa-rewards forcefully initializes the sidebar gift mechanics
-          $Shortcut.Arguments = "--no-first-run --partner-id=forsaken --enable-sidebar-extensions --enable-features=gxa-rewards,GXRewards,GXRewardsSidebarItem --with-feature:gx-rewards=1"
+          # Direct entry triggers: Forces the interface straight to the rewards landing link, suppressing the onboarding setup flag
+          $Shortcut.Arguments = "https://www.opera.com/gx/forsaken --no-first-run --partner-id=forsaken --enable-sidebar-extensions --enable-features=gxa-rewards,GXRewards,GXRewardsSidebarItem --with-feature:gx-rewards=1"
           $Shortcut.Save()
           Write-Host "Shortcut generated successfully."
 
