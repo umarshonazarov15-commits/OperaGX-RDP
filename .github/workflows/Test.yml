@@ -1,77 +1,44 @@
-name: Cloud PC + Token-Free RDP Tunnel (Bore) + Opera GX
+name: Cloud PC + Stable RDP Tunnel + Opera GX
 
 on:
   workflow_dispatch:
     inputs:
       runtime_minutes:
-        description: "Runtime in minutes (max 360)"
+        description: "Runtime in minutes"
         required: false
         default: "355"
-
-permissions:
-  contents: read
-
-defaults:
-  run:
-    shell: pwsh
+      ngrok_token:
+        description: "Your Ngrok Auth Token (Get from dashboard.ngrok.com)"
+        required: true
 
 jobs:
   desktop:
     runs-on: windows-latest
     timeout-minutes: 370
-    env:
-      rdp_user: user
-      rdp_pass: Pass1234
-
     steps:
-      - name: Disable Windows Firewall & Configure RDP
+      - name: Disable Firewall & Enable RDP
         run: |
-          # 1. Kill the Firewall (The most common cause of "Unable to connect")
-          Write-Host "Disabling Firewall to prevent connection drops..."
           Set-NetFirewallProfile -Profile Public,Private,Domain -Enabled False
-          
-          # 2. Configure RDP
-          Write-Host "Enabling RDP and configuring security..."
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Start-Service -Name "TermService" -ErrorAction SilentlyContinue
 
       - name: Setup User
         run: |
-          $Password = ConvertTo-SecureString "$env:rdp_pass" -AsPlainText -Force
-          Remove-LocalUser -Name "$env:rdp_user" -ErrorAction SilentlyContinue
-          New-LocalUser -Name "$env:rdp_user" -Password $Password -Description "Cloud PC" -PasswordNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "$env:rdp_user"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "$env:rdp_user"
+          $Password = ConvertTo-SecureString "Pass1234" -AsPlainText -Force
+          Remove-LocalUser -Name "user" -ErrorAction SilentlyContinue
+          New-LocalUser -Name "user" -Password $Password -Description "Cloud PC" -PasswordNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member "user"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "user"
 
-      - name: Launch Bore TCP Tunnel
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-pc-windows-msvc.zip" -OutFile "$env:TEMP\bore.zip"
-          Expand-Archive -Path "$env:TEMP\bore.zip" -DestinationPath "$env:TEMP\bore" -Force
-          
-          $logFile = "$env:TEMP\bore.log"
-          Start-Process "$env:TEMP\bore\bore.exe" -ArgumentList "local 3389 --to bore.pub" -RedirectStandardOutput $logFile -NoNewWindow
-          
-          Write-Host "Waiting 20 seconds for tunnel handshake..."
-          Start-Sleep -Seconds 20
-          
-          $LogContent = Get-Content $logFile
-          $Address = ($LogContent | Select-String "bore.pub:(\d+)" | Select-Object -First 1).Matches.Value
-          
-          if ($Address) {
-              Write-Host "`n#################################################################"
-              Write-Host "🚨 CONNECTION READY - USE MICROSOFT REMOTE DESKTOP APP 🚨"
-              Write-Host "PC NAME: $Address"
-              Write-Host "USER: user"
-              Write-Host "PASS: Pass1234"
-              Write-Host "#################################################################`n"
-          } else {
-              Write-Host "Tunnel did not initialize. Raw Log:"
-              Get-Content $logFile
-          }
+      - name: Start Ngrok Tunnel
+        uses: ngrok/ngrok-action@v1
+        with:
+          token: ${{ inputs.ngrok_token }}
+          addr: 3389
+          proto: tcp
 
-      - name: Keep Alive Loop
+      - name: Keep Alive
         run: |
-          $end = (Get-Date).AddMinutes(350)
-          while ((Get-Date) -lt $end) { Start-Sleep -Seconds 60 }
+          Write-Host "✅ Connection is live via Ngrok TCP. Check the Ngrok UI link above."
+          Start-Sleep -Seconds 21000
