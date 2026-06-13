@@ -39,6 +39,7 @@ jobs:
           if (Test-Path $vncPath) {
               Set-ItemProperty -Path $vncPath -Name "AuthRequired" -Value 0 -Type DWord
               Set-ItemProperty -Path $vncPath -Name "AllowLoopback" -Value 1 -Type DWord
+              Set-ItemProperty -Path $vncPath -Name "LoopbackOnly" -Value 0 -Type DWord
               Set-ItemProperty -Path $vncPath -Name "AcceptLocalConnections" -Value 1 -Type DWord
           }
           
@@ -52,7 +53,6 @@ jobs:
 
       - name: Deploy Web Interface & Dynamic Gateway Engines
         run: |
-          # Strip out all interactive terminal elements, progress bars, and warnings to prevent stalling
           python -m pip install websockify --quiet --no-input --disable-pip-version-check --no-color --progress-bar off
           npm install -g localtunnel --silent --no-fund --no-audit --non-interactive
           
@@ -81,13 +81,13 @@ jobs:
           $RawLink = (Get-Content $LogFile -Raw) | Select-String -Pattern 'https://[a-zA-Z0-9-]+\.loca\.lt' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value -First 1
           
           if ($RawLink) {
-              # Completely removed the trailing password string since authentication is disabled
-              $FinalUrl = $RawLink + "/vnc.html?autoconnect=true"
+              # FIX: We explicitly append &password= (blank) so noVNC knows not to look for input strings
+              $FinalUrl = $RawLink + "/vnc.html?autoconnect=true&password="
               Write-Host "===================================================="
               Write-Host "      WEB-BROWSER CLOUD PC IS READY TO CONNECT      "
               Write-Host "===================================================="
               Write-Host " CLICK LINK: $FinalUrl"
-              Write-Host " SECURITY  : Auth requirement bypassed on backend host."
+              Write-Host " SECURITY  : Blank bypass parameter enabled."
               Write-Host "===================================================="
           } else {
               Write-Error "CRITICAL: Dynamic gateway assignment timed out."
