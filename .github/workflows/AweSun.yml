@@ -26,11 +26,11 @@ jobs:
           if ($runtime -gt 360 -or $runtime -lt 1) { $runtime = 60 }
           "RUNTIME_MINUTES=$runtime" | Out-File -Append $env:GITHUB_ENV
 
-      - name: Download AweSun Installer
+      - name: Download AweSun Installer from GitHub Release
         run: |
-          $url = "https://download.aweray.com/awesun/AweSun_Setup.exe"
+          $url = "https://github.com/tusharpop553-afk/OperaGX-RDP/releases/download/v1.0/AweSun_Setup.exe"
           Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\AweSun_Setup.exe"
-          Write-Host "AweSun Installer downloaded successfully to temp directory."
+          Write-Host "AweSun Installer downloaded successfully from GitHub assets."
 
       - name: Launch Installer & Blind-Type Keystrokes
         run: |
@@ -58,10 +58,10 @@ jobs:
               Start-Sleep -Milliseconds 750
               
               # --- AUTOMATION SEQUENCE ---
-              # Adjust these specific keys depending on what your screenshot reveals later!
-              $wshell.SendKeys("{ENTER}")  # Hits Enter on the default "Install Now" action
+              # Press Enter to hit the default installation confirmation button
+              $wshell.SendKeys("{ENTER}")  
               Write-Host "Sent primary click keystroke. Waiting for backend extraction..."
-              Start-Sleep -Seconds 10       # Give it ample time to complete the unpack
+              Start-Sleep -Seconds 10       
               
               # Try to catch and close the final post-install program dashboard if it auto-launches
               if ($wshell.AppActivate("AweSun")) {
