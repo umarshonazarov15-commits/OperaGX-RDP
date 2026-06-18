@@ -42,21 +42,24 @@ jobs:
       - name: Wipe Unnecessary Pre-Installed GitHub Apps & Shortcuts
         run: |
           $publicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+          $userDesktop = "$env:USERPROFILE\Desktop"
           $targets = @("Unity Hub.lnk", "R 4.6.0.lnk", "Firefox.lnk", "Google Chrome.lnk", "Claim Rewards Here.lnk")
-          foreach ($target in $targets) { Remove-Item "$publicDesktop\$target" -Force -ErrorAction SilentlyContinue }
-
-      - name: Force Initialize Active Desktop UI Session (Session 0 Bypass)
-        run: |
-          Write-Host "Forcing active interactive desktop container layer..."
-          # Force Windows to assign execution rights to console session interactive threads
-          $tsconPath = "$env:windir\System32\tscon.exe"
-          if (Test-Path $tsconPath) {
-              # Attaches the current isolated runner thread to the active console wrapper
-              Start-Process -FilePath $tsconPath -ArgumentList "1 /dest:console" -ErrorAction SilentlyContinue
+          foreach ($target in $targets) { 
+              if (Test-Path "$publicDesktop\$target") { Remove-Item "$publicDesktop\$target" -Force -ErrorAction SilentlyContinue }
+              if (Test-Path "$userDesktop\$target") { Remove-Item "$userDesktop\$target" -Force -ErrorAction SilentlyContinue }
           }
-          
-          # Force screen initialization metrics
+
+      - name: Optimize Resolution & Force UI Automation Layers
+        run: |
           Set-DisplayResolution -Width 1600 -Height 1200 -Force -ErrorAction SilentlyContinue
+          
+          # Force Windows to allow UI Automation over remote layers
+          New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableUIADesktopToggle" -PropertyType DWord -Value 1 -Force -ErrorAction SilentlyContinue
+          
+          # Unblock Touch Remote restrictions in Remote Desktop Services
+          $tsPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations"
+          New-ItemProperty -Path $tsPath -Name "TouchMode" -PropertyType DWord -Value 1 -Force -ErrorAction SilentlyContinue
+          New-ItemProperty -Path $tsPath -Name "EnableTouchInjection" -PropertyType DWord -Value 1 -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 3
 
       - name: Download & Force Consumer Build of Opera GX
@@ -135,11 +138,9 @@ jobs:
               [Environment]::SetEnvironmentVariable($var, $null, "Process")
           }
 
-          # Define targeted execution arguments loading the Urban VPN store page directly in a single instance
+          # Define targeted execution arguments loading the Urban VPN store page directly
           $targetUrl = "https://chromewebstore.google.com/detail/urban-vpn-proxy/eppiocemhmnlbhjplcgkofciiegomcon"
-          
-          # Force software-only rendering acceleration inside the VM workspace to bypass hardware rendering freezes
-          $stealthArgs = "`"$targetUrl`" --no-first-run --disable-gpu --disable-software-rasterizer --disable-blink-features=AutomationControlled --disable-infobars --password-store=basic"
+          $stealthArgs = "`"$targetUrl`" --no-first-run --disable-blink-features=AutomationControlled --disable-infobars --password-store=basic"
 
           Write-Host "Configuring explicit launcher shortcut targeting Urban VPN..."
           $WshShell = New-Object -ComObject WScript.Shell
@@ -200,14 +201,20 @@ jobs:
           
           $u = $env:RDP_USER
           $sec = ConvertTo-SecureString $env:RDP_PASS -AsPlainText -Force
+          
+          # Create and enforce Admin privileges for account 'user'
           if (-not (Get-LocalUser -Name $u -EA SilentlyContinue)) {
             New-LocalUser -Name $u -Password $sec -AccountNeverExpires
-            Add-LocalGroupMember -Group "Administrators" -Member $u
-            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u
           } else {
             Set-LocalUser -Name $u -Password $sec -AccountNeverExpires
             Enable-LocalUser -Name $u
           }
+          
+          # Enforce absolute Admin status and RDP workspace execution clearance
+          Add-LocalGroupMember -Group "Administrators" -Member $u -ErrorAction SilentlyContinue
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u -ErrorAction SilentlyContinue
+          
+          # Open local registry parameters allowing full RDP tunneling
           Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop" | Out-Null
 
