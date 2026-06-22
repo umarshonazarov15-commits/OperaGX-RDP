@@ -32,10 +32,10 @@ jobs:
           $targets = @("Unity Hub.lnk", "R 4.6.0.lnk", "Firefox.lnk", "Google Chrome.lnk", "Claim Rewards Here.lnk")
           foreach ($target in $targets) { Remove-Item "$publicDesktop\$target" -Force -ErrorAction SilentlyContinue }
 
-      - name: Download & Force Forsaken Edition Build of Opera GX
+      - name: Download & Force Consumer Build of Opera GX
         run: |
-          Write-Host "Fetching partner-authenticated Opera GX Forsaken Core..."
-          $url = "https://net.geo.opera.com/opera_gx/stable/windows?utm_source=inf&utm_medium=gx&utm_campaign=forsaken&utm_id=forsaken_promo"
+          Write-Host "Fetching consumer-stable Opera GX Core..."
+          $url = "https://net.geo.opera.com/opera_gx/stable/windows?utm_source=inf&utm_medium=gx"
           $installer = "$env:TEMP\OperaGXSetup.exe"
           Invoke-WebRequest -Uri $url -OutFile $installer
           
@@ -48,14 +48,18 @@ jobs:
               Move-Item -Path "$userDesktop\Opera GX.lnk" -Destination $publicDesktop -Force -ErrorAction SilentlyContinue
           }
 
-          Write-Host "Configuring explicit launcher shortcut with forced promo link and sidebar flags..."
+          Write-Host "Configuring explicit launcher shortcut targeting Urban VPN..."
           $operaExe = "$env:ProgramFiles\Opera GX\opera.exe"
           if (-not (Test-Path $operaExe)) { $operaExe = "$env:ProgramFiles (x86)\Opera GX\opera.exe" }
           
+          # TARGET MODIFICATION: Swapped out Forsaken collab for Urban VPN Store Page + Automation Flags
+          $targetUrl = "https://chromewebstore.google.com/detail/urban-vpn-proxy/eppiocemhmnlbhjplcgkofciiegomcon"
+          $stealthArgs = "`"$targetUrl`" --no-first-run --disable-blink-features=AutomationControlled --disable-infobars --password-store=basic"
+
           $WshShell = New-Object -ComObject WScript.Shell
           $Shortcut = $WshShell.CreateShortcut("$publicDesktop\Opera GX Browser.lnk")
           $Shortcut.TargetPath = $operaExe
-          $Shortcut.Arguments = "https://www.opera.com/gx/forsaken --no-first-run --enable-features=GXRewards,GXRewardsSidebarItem --with-feature:gx-rewards=1"
+          $Shortcut.Arguments = $stealthArgs
           $Shortcut.Save()
 
           Start-Process -FilePath "$publicDesktop\Opera GX Browser.lnk"
